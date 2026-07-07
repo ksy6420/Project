@@ -1,0 +1,415 @@
+const express = require('express');
+const mysql = require('mysql2/promise');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+const path = require('path'); // 내장 path 모듈 확실하게 정의
+
+// 환경변수(.env) 설정 로드
+dotenv.config();
+
+const REQUIRED_ENV_VARS = [
+  'DB_HOST',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_DATABASE',
+  'JWT_SECRET',
+];
+REQUIRED_ENV_VARS.forEach((key) => {
+  if (!process.env[key]) {
+    console.error(
+      `[설정 오류] 환경변수 ${key}가 누락되었습니다. .env 파일을 확인해주세요.`,
+    );
+    process.exit(1);
+  }
+});
+
+const app = express();
+
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+);
+app.use(express.json()); // JSON 요청 본문을 파싱하기 위한 미들웨어
+
+// DB 연결 설정
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  connectTimeout: 5000,
+});
+
+async function testDBConnection() {
+  console.log('DB 연결 테스트 중...');
+  try {
+    const connection = await pool.getConnection();
+    console.log('DB 연결 성공');
+    connection.release();
+  } catch (error) {
+    console.error('DB 연결 실패:', error.message);
+    process.exit(1);
+  }
+}
+
+// Swagger 설정
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: '관리자 API 문서',
+      version: '2.0.0',
+      description: '관리자용 API 문서입니다.',
+      contact: {
+        name: '관리자',
+      },
+    },
+    servers: [
+      {
+        url: `http://localhost:${process.env.PORT || 3000}`,
+        description: '로컬 개발 서버',
+      },
+    ],
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT 토큰을 사용한 인증 방식입니다.',
+        },
+      },
+    },
+    // 명세(paths)를 자바스크립트 객체로 정의하여 포맷터 간섭을 원천 차단
+    paths: {
+      '/api/v2/auth/login': {
+        post: {
+          summary: '관리자 로그인 및 토큰 발급',
+          description:
+            '아이디(또는 이메일)와 비밀번호를 검증하여 일치할 경우 Access Token과 Refresh Token을 발급합니다.',
+          tags: ['Authentication'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['password'],
+                  properties: {
+                    user_id: {
+                      type: 'string',
+                      description: '사용자 아이디',
+                      example: 'admin@01',
+                    },
+                    email: {
+                      type: 'string',
+                      format: 'email',
+                      description: '사용자 이메일',
+                      example: 'admin@01',
+                    },
+                    password: {
+                      type: 'string',
+                      format: 'password',
+                      description: '비밀번호',
+                      example: 'devpassword12!',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: '로그인 성공',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      message: {
+                        type: 'string',
+                        example: '로그인 성공',
+                      },
+                      accessToken: {
+                        type: 'string',
+                      },
+                      refreshToken: {
+                        type: 'string',
+                      },
+                      user: {
+                        type: 'object',
+                        properties: {
+                          userId: {
+                            type: 'string',
+                          },
+                          userName: {
+                            type: 'string',
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            401: {
+              description: '인증 실패',
+            },
+            500: {
+              description: '서버 내부 오류',
+            },
+          },
+        },
+      },
+      '/api/v2/auth/refresh': {
+        post: {
+          summary: 'Access Token 재발급 (Silent Refresh)',
+          description:
+            'DB 내 Refresh Token 유효성 검증을 마친 뒤 새로운 Access Token을 갱신 발급합니다.',
+          tags: ['Authentication'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['refreshToken'],
+                  properties: {
+                    refreshToken: {
+                      type: 'string',
+                      description: '클라이언트에 저장된 리프레시 토큰 값',
+                      example: 'eyJhbGciOiJIUzI1NiIsIn...',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: '토큰 재발급 성공',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      accessToken: {
+                        type: 'string',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            400: {
+              description: '필수 값 누락',
+            },
+            403: {
+              description: '유효하지 않은 리프레시 토큰',
+            },
+          },
+        },
+      },
+      '/api/v2/auth/logout': {
+        post: {
+          summary: '사용자 로그아웃 및 토큰 폐기',
+          description:
+            'DB의 세션에 등록된 refresh_token 값을 제거하여 로그아웃 처리합니다.',
+          tags: ['Authentication'],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  required: ['user_id'],
+                  properties: {
+                    user_id: {
+                      type: 'string',
+                      description: '로그아웃 대상 사용자의 ID',
+                      example: 'admin@01',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: '로그아웃 성공',
+            },
+            400: {
+              description: '필수 유저 정보 누락',
+            },
+            500: {
+              description: '데이터베이스 에러',
+            },
+          },
+        },
+      },
+    },
+  },
+  // 주석을 읽지 않으므로 빈 배열로 설정 (안전성 극대화)
+  apis: [],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// 관리자 로그인 및 토큰 발급 (POST /api/v2/auth/login)
+app.post('/api/v2/auth/login', async (req, res) => {
+  console.log('로그인 요청 수신:', req.body);
+  const { user_id, email, password } = req.body;
+  const identifier = user_id || email;
+
+  try {
+    const [rows] = await pool.query('SELECT * FROM tb_user WHERE user_id = ?', [
+      identifier,
+    ]);
+
+    if (rows.length === 0) {
+      return res.status(401).json({ message: '존재하지 않는 ID입니다.' });
+    }
+
+    const user = rows[0];
+    const dbPassword = String(user.password).trim();
+    let isMatch = false;
+
+    // Bcrypt 암호화 형태($2b$, $2a$)인지 체크하여 대조 진행
+    if (dbPassword.startsWith('$2b$') || dbPassword.startsWith('$2a$')) {
+      isMatch = await bcrypt.compare(password, dbPassword);
+    } else {
+      isMatch = dbPassword === password;
+    }
+
+    if (!isMatch) {
+      return res.status(401).json({ message: '비밀번호가 일치하지 않습니다.' });
+    }
+
+    // 보안 요구사항 : Access Token 유효기간 1시간으로 설정
+    const accessToken = jwt.sign(
+      { userId: user.user_id, userName: user.user_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+
+    // Refresh Token 유효기간 7일로 설정
+    const refreshToken = jwt.sign(
+      { userId: user.user_id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' },
+    );
+
+    // DB에 생성된 Refresh Token을 업데이트
+    await pool.query('UPDATE tb_user SET refresh_token = ? WHERE user_id = ?', [
+      refreshToken,
+      user.user_id,
+    ]);
+
+    // 프론트엔드로 토큰 세트와 사용자 기본 정보 반환
+    return res.json({
+      message: '로그인 성공',
+      accessToken,
+      refreshToken,
+      user: {
+        userId: user.user_id,
+        userName: user.user_name,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res
+      .status(500)
+      .json({ message: '로그인 처리 중 서버 내부 오류가 발생했습니다.' });
+  }
+});
+
+// Refresh Token을 이용한 Access Token 재발급 (POST /api/v2/auth/refresh)
+app.post('/api/v2/auth/refresh', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res
+      .status(400)
+      .json({ message: '인증 갱신을 위해 Refresh Token이 필요합니다.' });
+  }
+
+  try {
+    // Refresh Token 검증
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+
+    // 토큰 안의 유저 ID와 DB에 저장된 Refresh Token을 대조하여 유효성 확인
+    const [rows] = await pool.query(
+      'SELECT * FROM tb_user WHERE user_id = ? AND refresh_token = ?',
+      [decoded.userId, refreshToken],
+    );
+
+    if (rows.length === 0) {
+      return res
+        .status(403)
+        .json({ message: '유효하지 않거나 만료된 Refresh Token입니다.' });
+    }
+
+    const user = rows[0];
+
+    // 새로운 Access Token 발급 (유효기간 1시간)
+    const newAccessToken = jwt.sign(
+      { userId: user.user_id, userName: user.user_name },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' },
+    );
+
+    // 프론트엔드로 새로운 Access Token 반환
+    return res.json({
+      accessToken: newAccessToken,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(403).json({ message: '토큰 인증에 실패했습니다.' });
+  }
+});
+
+// 로그아웃 시 데이터베이스의 세션 Refresh Token을 날려 토큰 재탈취 방어 (POST /api/v2/auth/logout)
+app.post('/api/v2/auth/logout', async (req, res) => {
+  const { user_id } = req.body;
+
+  if (!user_id) {
+    return res
+      .status(400)
+      .json({ message: '로그아웃을 요청한 유저의 정보가 필요합니다.' });
+  }
+
+  try {
+    await pool.query(
+      'UPDATE tb_user SET refresh_token = NULL WHERE user_id = ?',
+      [user_id],
+    );
+    return res.status(200).json({
+      message: '성공적으로 로그아웃 되었습니다. 세션 토큰이 폐기되었습니다.',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: '로그아웃 처리 중 데이터베이스 연동 에러가 발생했습니다.',
+    });
+  }
+});
+
+// 서버 시작
+const PORT = process.env.PORT || 3000;
+testDBConnection().then(() => {
+  app.listen(PORT, () => {
+    console.log(` API 서버가 구동되었습니다. (Port: ${PORT})`);
+    console.log(`Swagger 문서: http://localhost:${PORT}/api-docs`);
+  });
+});
