@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
-  variant?: 'primary' | 'secondary' | 'orange'; // 오렌지 테마 안전하게 추가
+  variant?: 'primary' | 'secondary' | 'orange';
   isLoading?: boolean;
 }
 
@@ -17,18 +17,21 @@ export const Button: React.FC<ButtonProps> = React.memo(
     isLoading = false,
     ...props
   }) => {
-    let variantClass = variant === 'primary' ? 'btn-primary' : 'btn-secondary';
+    const baseClass =
+      'flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg font-semibold text-sm transition-all duration-200 active:scale-[0.97] disabled:opacity-50 disabled:pointer-events-none cursor-pointer outline-none';
 
-    if (variant === 'orange') {
-      variantClass =
-        'bg-[#F97316] hover:bg-[#EA580C] text-white shadow-lg shadow-orange-500/10 border-none';
-    }
+    const variantClass =
+      variant === 'primary'
+        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 hover:bg-blue-500'
+        : variant === 'secondary'
+          ? 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700'
+          : 'bg-[#F97316] hover:bg-[#EA580C] text-white shadow-lg shadow-orange-500/10 border-none';
 
     return (
       <button
         type={type}
         disabled={disabled || isLoading}
-        className={`btn ${variantClass} ${className}`}
+        className={`${baseClass} ${variantClass} ${className}`}
         {...props}
       >
         {isLoading ? (

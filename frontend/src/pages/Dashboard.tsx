@@ -1,9 +1,9 @@
 import type { IPMetadata } from '../types/threat';
-import { useState, useEffect } from 'react';
-import { Header } from '../components/organisms/Header';
+import { useState } from 'react';
+import { Header } from '../components/layout/Header';
 import { IPSearchForm } from '../components/organisms/IPSearchForm';
 import { ScanResultView } from '../components/organisms/ScanResultView';
-import { Footer } from '../components/organisms/Footer';
+import { Footer } from '../components/layout/Footer';
 
 const OFFLINE_DB: Record<string, IPMetadata> = {
   '189.20.181.138': {
@@ -37,10 +37,6 @@ const OFFLINE_DB: Record<string, IPMetadata> = {
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentResult, setCurrentResult] = useState<IPMetadata | null>(null);
-
-  useEffect(() => {
-    setCurrentResult(OFFLINE_DB['189.20.181.138']);
-  }, []);
 
   const handleIPSearch = async (ipToSearch: string) => {
     setIsLoading(true);
@@ -76,7 +72,7 @@ export function Dashboard() {
 
       setCurrentResult(resultData);
     } catch (error) {
-      console.error(error);
+      console.error('[IP Search Error]:', error);
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +88,7 @@ export function Dashboard() {
             <span className="text-gray-300 font-extrabold">실시간 IP 검사</span>
             <span className="text-blue-500 font-light select-none">»</span>
             <span className="text-[#F97316] font-mono drop-shadow-[0_4px_10px_rgba(249,115,22,0.25)] tracking-tight">
-              {currentResult ? currentResult.ip : '대기 중'}
+              {currentResult ? currentResult.ip : ''}
             </span>
           </h1>
         </div>

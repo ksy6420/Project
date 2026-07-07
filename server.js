@@ -277,7 +277,7 @@ app.post('/api/v2/auth/login', async (req, res) => {
     ]);
 
     if (rows.length === 0) {
-      return res.status(401).json({ message: '존재하지 않는 ID입니다.' });
+      return res.status(401).json({ message: '존재하지 않는 계정입니다.' });
     }
 
     const user = rows[0];
@@ -326,7 +326,7 @@ app.post('/api/v2/auth/login', async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('[Login Error]:', error.message);
     return res
       .status(500)
       .json({ message: '로그인 처리 중 서버 내부 오류가 발생했습니다.' });
@@ -373,7 +373,7 @@ app.post('/api/v2/auth/refresh', async (req, res) => {
       accessToken: newAccessToken,
     });
   } catch (error) {
-    console.error(error);
+    console.error('[Refresh Error]:', error.message);
     return res.status(403).json({ message: '토큰 인증에 실패했습니다.' });
   }
 });

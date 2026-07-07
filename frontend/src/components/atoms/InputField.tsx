@@ -23,15 +23,18 @@ export const InputField: React.FC<InputFieldProps> = React.memo(
     const inputId = id || React.useId();
 
     return (
-      <div className="input-group">
+      <div className="flex flex-col gap-2 text-left w-full">
         {label && (
-          <label htmlFor={inputId} className="input-label">
+          <label
+            htmlFor={inputId}
+            className="text-sm font-semibold text-gray-400 tracking-wide"
+          >
             {label} {required && <span className="text-red-500">*</span>}
           </label>
         )}
-        <div className="input-container">
+        <div className="relative w-full flex items-center">
           {Icon && (
-            <div className="input-icon">
+            <div className="absolute left-3.5 text-gray-500 pointer-events-none flex items-center justify-center">
               <Icon className="h-5 w-5" />
             </div>
           )}
@@ -42,7 +45,7 @@ export const InputField: React.FC<InputFieldProps> = React.memo(
             onChange={onChange}
             required={required}
             placeholder={placeholder}
-            className={`input-field ${
+            className={`w-full py-3 ${Icon ? 'pl-10' : 'pl-4'} pr-4 bg-[#161b26] border border-gray-700 rounded-lg text-gray-100 text-sm transition-all outline-none focus:border-blue-600 focus:ring-3 focus:ring-blue-500/20 placeholder-gray-500 ${
               error
                 ? 'border-red-500 focus:border-red-500 focus:ring-1 focus:ring-red-500'
                 : ''

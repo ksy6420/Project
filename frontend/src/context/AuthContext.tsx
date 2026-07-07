@@ -103,15 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userId: data.user.userId,
           userName: data.user.userName,
           email: email,
-          avatarUrl:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
+      avatarUrl: undefined,
         };
 
         setUser(loggedInUser);
         localStorage.setItem('user', JSON.stringify(loggedInUser));
         return true;
-      } catch (err: any) {
-        setError(err.message || '인증 처리에 실패했습니다.');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : '인증 처리에 실패했습니다.');
         return false;
       } finally {
         setLoading(false);
@@ -133,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
     } catch (err) {
-      console.error('⚠️ [Backend Logout Communication Error]:', err);
+      console.error('[Backend Logout Communication Error]:', err);
     } finally {
       // API 연결 실패 여부와 무관하게 사용자 브라우저의 인증은 무조건 즉각 초기화 (UX 방어 정책)
       setUser(null);

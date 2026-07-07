@@ -1,6 +1,6 @@
 import type { IPMetadata } from '../../types/threat';
-import { ThreatScoreGauge } from '../organisms/ThreatScoreGauge';
-import { MetadataTable } from '../organisms/MetadataTable';
+import { ThreatScoreGauge } from '../molecules/ThreatScoreGauge';
+import { MetadataTable } from '../molecules/MetadataTable';
 import React from 'react';
 import { ShieldAlert, AlertTriangle, ShieldCheck } from 'lucide-react';
 
@@ -42,15 +42,19 @@ export const ScanResultView: React.FC<ScanResultViewProps> = React.memo(
             </div>
             <div>
               <h3 className="font-extrabold text-base md:text-lg tracking-tight">
-                IP {result.ip} 은{' '}
-                {result.threatScore >= 31
-                  ? '블랙리스트 위협 DB에 기록되었습니다'
-                  : '데이터베이스에서 찾을 수 없습니다.'}
+                IP {result.ip}{' '}
+                {result.threatScore >= 71
+                  ? '블랙리스트 위협 DB에 기록된 위험한 IP입니다'
+                  : result.threatScore >= 31
+                    ? '블랙리스트 위협 DB에 기록된 주의 대상 IP입니다'
+                    : '데이터베이스에서 찾을 수 없습니다.'}
               </h3>
               <p className="text-xs mt-1 text-gray-400 leading-relaxed font-medium">
-                {result.threatScore >= 31
+                {result.threatScore >= 71
                   ? `해당 IP주소는 총 ${result.uniqueSources}개의 독립된 곳에서 누적 ${result.totalReports}회 신고되었습니다.`
-                  : '보안 유출 이력이 확인되지 않은 안전한 클린 IP 대역입니다.'}
+                  : result.threatScore >= 31
+                    ? `해당 IP주소는 총 ${result.uniqueSources}개의 독립된 곳에서 누적 ${result.totalReports}회 신고되었습니다.`
+                    : '보안 유출 이력이 확인되지 않은 안전한 클린 IP 대역입니다.'}
               </p>
             </div>
           </div>
