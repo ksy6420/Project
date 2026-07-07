@@ -50,7 +50,6 @@ export const InputField: React.FC<InputFieldProps> = React.memo(
             {...props}
           />
         </div>
-        {/* 에러 정보 동적 출력 */}
         {error && <span className="text-xs text-red-400 mt-1">{error}</span>}
       </div>
     );

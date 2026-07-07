@@ -11,7 +11,7 @@ interface IPSearchFormProps {
 
 export const IPSearchForm: React.FC<IPSearchFormProps> = React.memo(
   ({ onSearch, isLoading }) => {
-    const [ipInput, setIpInput] = useState<string>('189.20.181.138');
+    const [ipInput, setIpInput] = useState<string>('');
     const [error, setError] = useState<string>('');
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -57,7 +57,7 @@ export const IPSearchForm: React.FC<IPSearchFormProps> = React.memo(
                 type="text"
                 value={ipInput}
                 onChange={(e) => setIpInput(e.target.value)}
-                placeholder="예) 189.20.181.138"
+                placeholder="예) 1.1.1.1"
                 required
                 error={error}
               />

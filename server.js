@@ -6,7 +6,7 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
-const path = require('path'); // 내장 path 모듈 확실하게 정의
+const path = require('path');
 
 // 환경변수(.env) 설정 로드
 dotenv.config();
@@ -91,7 +91,6 @@ const swaggerOptions = {
         },
       },
     },
-    // 명세(paths)를 자바스크립트 객체로 정의하여 포맷터 간섭을 원천 차단
     paths: {
       '/api/v2/auth/login': {
         post: {
@@ -260,7 +259,6 @@ const swaggerOptions = {
       },
     },
   },
-  // 주석을 읽지 않으므로 빈 배열로 설정 (안전성 극대화)
   apis: [],
 };
 
