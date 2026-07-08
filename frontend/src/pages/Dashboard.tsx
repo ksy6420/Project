@@ -5,34 +5,24 @@ import { IPSearchForm } from '../components/organisms/IPSearchForm';
 import { ScanResultView } from '../components/organisms/ScanResultView';
 import { Footer } from '../components/layout/Footer';
 
-const OFFLINE_DB: Record<string, IPMetadata> = {
-  '189.20.181.138': {
-    ip: '189.20.181.138',
-    threatScore: 100,
-    isp: 'TELEFONICA BRASIL S.A',
-    usageType: 'Mobile ISP',
-    hostname: '189-20-181-138.customer.tdatabrasil.net.br',
-    domainName: 'telefonica.com.br',
-    country: 'Brazil',
-    totalReports: 1420,
-    uniqueSources: 24,
-    latestReportDate: '2026-07-03',
-    status: 'Danger',
-  },
-  '8.8.8.8': {
-    ip: '8.8.8.8',
-    threatScore: 0,
-    isp: 'Google LLC',
-    usageType: 'DNS Server',
-    hostname: 'dns.google',
-    domainName: 'google.com',
-    country: 'United States',
-    totalReports: 0,
-    uniqueSources: 0,
-    latestReportDate: 'N/A',
-    status: 'Safe',
-  },
-};
+const API_BASE_URL = 'http://localhost:3000/api/v2';
+
+function mapApiResult(data: any, ip: string): IPMetadata {
+  const score = data.abuseConfidenceScore ?? 0;
+  return {
+    ip: data.ipAddress || ip,
+    threatScore: score,
+    isp: data.isp || '-',
+    usageType: data.usageType || '-',
+    hostname: data.hostnames?.[0] || ip,
+    domainName: data.domain || '-',
+    country: data.countryName || '-',
+    totalReports: data.totalReports ?? 0,
+    uniqueSources: data.numDistinctUsers ?? 0,
+    latestReportDate: data.lastReportedAt || 'N/A',
+    status: score >= 71 ? 'Danger' : score >= 31 ? 'Warning' : 'Safe',
+  };
+}
 
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -42,35 +32,14 @@ export function Dashboard() {
     setIsLoading(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const res = await fetch(`${API_BASE_URL}/ip/check?ip=${ipToSearch}`);
+      const body = await res.json();
 
-      let resultData = OFFLINE_DB[ipToSearch];
-
-      if (!resultData) {
-        const simulatedScore = Math.floor(Math.random() * 101);
-        resultData = {
-          ip: ipToSearch,
-          threatScore: simulatedScore,
-          isp: 'Cloudflare, Inc. Global Network',
-          usageType: 'CDN / Anycast Hub Proxy',
-          hostname: `${ipToSearch.replace(/\./g, '-')}.cloudflare-anycast.net`,
-          domainName: 'cloudflare.com',
-          country: 'South Korea',
-          totalReports:
-            simulatedScore > 30 ? Math.floor(Math.random() * 180) + 12 : 0,
-          uniqueSources:
-            simulatedScore > 30 ? Math.floor(Math.random() * 10) + 1 : 0,
-          latestReportDate: new Date().toISOString().split('T')[0],
-          status:
-            simulatedScore >= 71
-              ? 'Danger'
-              : simulatedScore >= 31
-                ? 'Warning'
-                : 'Safe',
-        };
+      if (!res.ok) {
+        throw new Error(body.message || 'IP 조회 중 오류가 발생했습니다.');
       }
 
-      setCurrentResult(resultData);
+      setCurrentResult(mapApiResult(body.data, ipToSearch));
     } catch (error) {
       console.error('[IP Search Error]:', error);
     } finally {
@@ -80,7 +49,7 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-white">
-      <Header analystName="Young-Hun" role="Security Analyst" />
+      <Header />
 
       <main className="flex-1 px-6 md:px-12 py-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
         <div className="pb-2 border-b border-gray-800/60">

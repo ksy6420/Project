@@ -32,6 +32,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
+  const refreshAccessToken = useCallback(async () => {
+    const storedRefreshToken = localStorage.getItem('refreshToken');
+    if (!storedRefreshToken) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: storedRefreshToken }),
+      });
+
+      if (!response.ok) {
+        throw new Error('리프레시 세션 만료');
+      }
+
+      const data = await response.json();
+      setAccessToken(data.accessToken);
+    } catch {
+      setUser(null);
+      setAccessToken(null);
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
+  }, []);
+
   // 1. 앱 기동(마운트) 즉시 실행되는 Silent Refresh (세션 유지 보장)
   useEffect(() => {
     const restoreSession = async () => {
@@ -44,7 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        // 백엔드의 리프레시 토큰 대조 엔드포인트 호출
         const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -57,11 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const data = await response.json();
 
-        // 메모리에 발급된 신규 Access Token 적재
         setAccessToken(data.accessToken);
         setUser(JSON.parse(storedUser));
-      } catch (err) {
-        // 검증에 실패한 만료 정보는 일괄 파기하여 무결성 유지
+      } catch {
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
       } finally {
@@ -71,6 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     restoreSession();
   }, []);
+
+  // 4분마다 silent refresh로 accessToken 갱신
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(refreshAccessToken, 4 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user, refreshAccessToken]);
 
   // 2. 백엔드 API 서버를 타겟으로 실 데이터 연동 및 토큰 세트 저장
   const login = useCallback(

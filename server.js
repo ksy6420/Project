@@ -4,9 +4,8 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
 const path = require('path');
+const { checkIpFromLocalDb } = require('./ipService');
 
 // 환경변수(.env) 설정 로드
 dotenv.config();
@@ -64,206 +63,252 @@ async function testDBConnection() {
 }
 
 // Swagger 설정
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: '관리자 API 문서',
-      version: '2.0.0',
-      description: '관리자용 API 문서입니다.',
-      contact: {
-        name: '관리자',
+const swaggerSpec = {
+  openapi: '3.0.0',
+  info: {
+    title: '관리자 API 문서',
+    version: '2.0.0',
+    description: '관리자용 API 문서입니다.',
+    contact: { name: '관리자' },
+  },
+  servers: [
+    {
+      url: `http://localhost:${process.env.PORT || 3000}`,
+      description: '로컬 개발 서버',
+    },
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'JWT 토큰을 사용한 인증 방식입니다.',
       },
     },
-    servers: [
-      {
-        url: `http://localhost:${process.env.PORT || 3000}`,
-        description: '로컬 개발 서버',
-      },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-          description: 'JWT 토큰을 사용한 인증 방식입니다.',
+  },
+  paths: {
+    '/api/v2/auth/login': {
+      post: {
+        summary: '관리자 로그인 및 토큰 발급',
+        description:
+          '아이디(또는 이메일)와 비밀번호를 검증하여 일치할 경우 Access Token과 Refresh Token을 발급합니다.',
+        tags: ['Authentication'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['password'],
+                properties: {
+                  user_id: {
+                    type: 'string',
+                    description: '사용자 아이디',
+                    example: 'admin@01',
+                  },
+                  email: {
+                    type: 'string',
+                    format: 'email',
+                    description: '사용자 이메일',
+                    example: 'admin@01',
+                  },
+                  password: {
+                    type: 'string',
+                    format: 'password',
+                    description: '비밀번호',
+                    example: 'devpassword12!',
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: '로그인 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    message: { type: 'string', example: '로그인 성공' },
+                    accessToken: { type: 'string' },
+                    refreshToken: { type: 'string' },
+                    user: {
+                      type: 'object',
+                      properties: {
+                        userId: { type: 'string' },
+                        userName: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { description: '인증 실패' },
+          500: { description: '서버 내부 오류' },
         },
       },
     },
-    paths: {
-      '/api/v2/auth/login': {
-        post: {
-          summary: '관리자 로그인 및 토큰 발급',
-          description:
-            '아이디(또는 이메일)와 비밀번호를 검증하여 일치할 경우 Access Token과 Refresh Token을 발급합니다.',
-          tags: ['Authentication'],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['password'],
-                  properties: {
-                    user_id: {
-                      type: 'string',
-                      description: '사용자 아이디',
-                      example: 'admin@01',
-                    },
-                    email: {
-                      type: 'string',
-                      format: 'email',
-                      description: '사용자 이메일',
-                      example: 'admin@01',
-                    },
-                    password: {
-                      type: 'string',
-                      format: 'password',
-                      description: '비밀번호',
-                      example: 'devpassword12!',
-                    },
+    '/api/v2/auth/refresh': {
+      post: {
+        summary: 'Access Token 재발급 (Silent Refresh)',
+        description:
+          'DB 내 Refresh Token 유효성 검증 후 새로운 Access Token을 발급합니다.',
+        tags: ['Authentication'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['refreshToken'],
+                properties: {
+                  refreshToken: {
+                    type: 'string',
+                    description: '리프레시 토큰',
+                    example: 'eyJhbGciOiJIUzI1NiIsIn...',
                   },
                 },
               },
-            },
-          },
-          responses: {
-            200: {
-              description: '로그인 성공',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      message: {
-                        type: 'string',
-                        example: '로그인 성공',
-                      },
-                      accessToken: {
-                        type: 'string',
-                      },
-                      refreshToken: {
-                        type: 'string',
-                      },
-                      user: {
-                        type: 'object',
-                        properties: {
-                          userId: {
-                            type: 'string',
-                          },
-                          userName: {
-                            type: 'string',
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            401: {
-              description: '인증 실패',
-            },
-            500: {
-              description: '서버 내부 오류',
             },
           },
         },
-      },
-      '/api/v2/auth/refresh': {
-        post: {
-          summary: 'Access Token 재발급 (Silent Refresh)',
-          description:
-            'DB 내 Refresh Token 유효성 검증을 마친 뒤 새로운 Access Token을 갱신 발급합니다.',
-          tags: ['Authentication'],
-          requestBody: {
-            required: true,
+        responses: {
+          200: {
+            description: '토큰 재발급 성공',
             content: {
               'application/json': {
                 schema: {
                   type: 'object',
-                  required: ['refreshToken'],
-                  properties: {
-                    refreshToken: {
-                      type: 'string',
-                      description: '클라이언트에 저장된 리프레시 토큰 값',
-                      example: 'eyJhbGciOiJIUzI1NiIsIn...',
-                    },
+                  properties: { accessToken: { type: 'string' } },
+                },
+              },
+            },
+          },
+          400: { description: '필수 값 누락' },
+          403: { description: '유효하지 않은 리프레시 토큰' },
+        },
+      },
+    },
+    '/api/v2/auth/logout': {
+      post: {
+        summary: '사용자 로그아웃 및 토큰 폐기',
+        description: 'DB의 refresh_token 값을 제거하여 로그아웃 처리합니다.',
+        tags: ['Authentication'],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['user_id'],
+                properties: {
+                  user_id: {
+                    type: 'string',
+                    description: '로그아웃 대상 사용자 ID',
+                    example: 'admin@01',
                   },
                 },
               },
             },
           },
-          responses: {
-            200: {
-              description: '토큰 재발급 성공',
-              content: {
-                'application/json': {
-                  schema: {
-                    type: 'object',
-                    properties: {
-                      accessToken: {
-                        type: 'string',
+        },
+        responses: {
+          200: { description: '로그아웃 성공' },
+          400: { description: '필수 유저 정보 누락' },
+          500: { description: '데이터베이스 에러' },
+        },
+      },
+    },
+    '/api/v2/ip/check': {
+      get: {
+        summary: 'IP 주소 위협 정보 조회',
+        description:
+          '로컬 DB에서 IP의 블랙리스트 등록 여부 및 위협 점수를 조회합니다.',
+        tags: ['IP Check'],
+        parameters: [
+          {
+            name: 'ip',
+            in: 'query',
+            required: true,
+            schema: { type: 'string' },
+            description: '조회할 IP 주소',
+            example: '8.8.8.8',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'IP 정보 조회 성공',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'object',
+                      properties: {
+                        ipAddress: { type: 'string' },
+                        domain: { type: 'string' },
+                        hostnames: { type: 'array', items: { type: 'string' } },
+                        isWhitelisted: { type: 'boolean' },
+                        abuseConfidenceScore: { type: 'integer' },
+                        totalReports: { type: 'integer' },
+                        numDistinctUsers: { type: 'integer' },
+                        countryName: { type: 'string' },
+                        countryCode: { type: 'string' },
+                        usageType: { type: 'string' },
+                        isp: { type: 'string' },
+                        lastReportedAt: { type: 'string' },
+                        requestTime: { type: 'string' },
                       },
                     },
                   },
                 },
               },
             },
-            400: {
-              description: '필수 값 누락',
-            },
-            403: {
-              description: '유효하지 않은 리프레시 토큰',
-            },
           },
-        },
-      },
-      '/api/v2/auth/logout': {
-        post: {
-          summary: '사용자 로그아웃 및 토큰 폐기',
-          description:
-            'DB의 세션에 등록된 refresh_token 값을 제거하여 로그아웃 처리합니다.',
-          tags: ['Authentication'],
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  required: ['user_id'],
-                  properties: {
-                    user_id: {
-                      type: 'string',
-                      description: '로그아웃 대상 사용자의 ID',
-                      example: 'admin@01',
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            200: {
-              description: '로그아웃 성공',
-            },
-            400: {
-              description: '필수 유저 정보 누락',
-            },
-            500: {
-              description: '데이터베이스 에러',
-            },
-          },
+          400: { description: 'IP 주소 누락' },
+          500: { description: '서버 내부 오류' },
         },
       },
     },
   },
-  apis: [],
 };
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs/swagger.json', (req, res) => res.json(swaggerSpec));
+app.use(
+  '/swagger-static',
+  express.static(path.join(__dirname, 'node_modules/swagger-ui-dist')),
+);
+app.get('/api-docs', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>API 문서</title>
+  <link rel="stylesheet" href="/swagger-static/swagger-ui.css" />
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="/swagger-static/swagger-ui-bundle.js"></script>
+  <script src="/swagger-static/swagger-ui-standalone-preset.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url: '/api-docs/swagger.json',
+      dom_id: '#swagger-ui',
+      presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIStandalonePreset
+      ],
+      layout: 'StandaloneLayout'
+    });
+  </script>
+</body>
+</html>`);
+});
 
 // 관리자 로그인 및 토큰 발급 (POST /api/v2/auth/login)
 app.post('/api/v2/auth/login', async (req, res) => {
@@ -295,18 +340,16 @@ app.post('/api/v2/auth/login', async (req, res) => {
       return res.status(401).json({ message: '비밀번호가 일치하지 않습니다.' });
     }
 
-    // 보안 요구사항 : Access Token 유효기간 1시간으로 설정
     const accessToken = jwt.sign(
       { userId: user.user_id, userName: user.user_name },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' },
+      { expiresIn: '5m' },
     );
 
-    // Refresh Token 유효기간 7일로 설정
     const refreshToken = jwt.sign(
       { userId: user.user_id },
       process.env.JWT_SECRET,
-      { expiresIn: '7d' },
+      { expiresIn: '1h' },
     );
 
     // DB에 생성된 Refresh Token을 업데이트
@@ -361,11 +404,10 @@ app.post('/api/v2/auth/refresh', async (req, res) => {
 
     const user = rows[0];
 
-    // 새로운 Access Token 발급 (유효기간 1시간)
     const newAccessToken = jwt.sign(
       { userId: user.user_id, userName: user.user_name },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' },
+      { expiresIn: '5m' },
     );
 
     // 프론트엔드로 새로운 Access Token 반환
@@ -400,6 +442,23 @@ app.post('/api/v2/auth/logout', async (req, res) => {
     return res.status(500).json({
       message: '로그아웃 처리 중 데이터베이스 연동 에러가 발생했습니다.',
     });
+  }
+});
+
+// IP 위협 정보 조회 (GET /api/v2/ip/check?ip=1.1.1.1)
+app.get('/api/v2/ip/check', async (req, res) => {
+  const ip = req.query.ip;
+
+  if (!ip) {
+    return res.status(400).json({ message: '조회할 IP 주소를 입력해주세요.' });
+  }
+
+  try {
+    const result = await checkIpFromLocalDb(pool, ip);
+    return res.json(result);
+  } catch (error) {
+    console.error('[IP Check Error]:', error.message);
+    return res.status(500).json({ message: error.message });
   }
 });
 
