@@ -10,6 +10,7 @@ export interface IPMetadata {
   uniqueSources: number;
   latestReportDate: string;
   status: 'Danger' | 'Warning' | 'Safe';
+  isExternalFetch?: boolean;
 }
 
 export interface ScanHistory {

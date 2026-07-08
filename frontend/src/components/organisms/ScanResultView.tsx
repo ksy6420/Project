@@ -2,7 +2,7 @@ import type { IPMetadata } from '../../types/threat';
 import { ThreatScoreGauge } from '../molecules/ThreatScoreGauge';
 import { MetadataTable } from '../molecules/MetadataTable';
 import React from 'react';
-import { ShieldAlert, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ShieldAlert, AlertTriangle, ShieldCheck, CloudDownload } from 'lucide-react';
 
 interface ScanResultViewProps {
   result: IPMetadata;
@@ -58,7 +58,13 @@ export const ScanResultView: React.FC<ScanResultViewProps> = React.memo(
               </p>
             </div>
           </div>
-          <div className="self-stretch md:self-auto flex items-center justify-end">
+          <div className="self-stretch md:self-auto flex items-center gap-2">
+            {result.isExternalFetch && (
+              <span className="px-3 py-1.5 rounded-md text-xs font-bold tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1.5 whitespace-nowrap">
+                <CloudDownload className="w-3.5 h-3.5" />
+                외부 조회
+              </span>
+            )}
             <span
               className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider ${
                 result.threatScore >= 71

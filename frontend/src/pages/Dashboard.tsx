@@ -21,15 +21,19 @@ function mapApiResult(data: any, ip: string): IPMetadata {
     uniqueSources: data.numDistinctUsers ?? 0,
     latestReportDate: data.lastReportedAt || 'N/A',
     status: score >= 71 ? 'Danger' : score >= 31 ? 'Warning' : 'Safe',
+    isExternalFetch: data.isExternalFetch ?? false,
   };
 }
 
 export function Dashboard() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentResult, setCurrentResult] = useState<IPMetadata | null>(null);
+  const [searchError, setSearchError] = useState<string>('');
 
   const handleIPSearch = async (ipToSearch: string) => {
     setIsLoading(true);
+    setSearchError('');
+    setCurrentResult(null);
 
     try {
       const res = await fetch(`${API_BASE_URL}/ip/check?ip=${ipToSearch}`);
@@ -41,7 +45,7 @@ export function Dashboard() {
 
       setCurrentResult(mapApiResult(body.data, ipToSearch));
     } catch (error) {
-      console.error('[IP Search Error]:', error);
+      setSearchError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +67,12 @@ export function Dashboard() {
         </div>
 
         <IPSearchForm onSearch={handleIPSearch} isLoading={isLoading} />
+
+        {searchError && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
+            {searchError}
+          </div>
+        )}
 
         {currentResult ? (
           <ScanResultView result={currentResult} />

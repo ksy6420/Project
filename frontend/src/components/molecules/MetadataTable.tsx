@@ -1,5 +1,5 @@
 import type { IPMetadata } from '../../types/threat';
-import { Activity, Globe, User, ExternalLink, Clock } from 'lucide-react';
+import { Activity, Globe, User, ExternalLink, Clock, CloudDownload } from 'lucide-react';
 
 interface MetadataTableProps {
   metadata: IPMetadata;
@@ -44,10 +44,18 @@ export const MetadataTable: React.FC<MetadataTableProps> = ({ metadata }) => {
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
           세부 메타데이터 상세 분석
         </h3>
-        <span className="text-xs text-gray-500 flex items-center gap-1">
-          <Clock className="w-3.5 h-3.5" /> 최근 보고일:{' '}
-          {metadata.latestReportDate}
-        </span>
+        <div className="flex items-center gap-2">
+          {metadata.isExternalFetch && (
+            <span className="text-xs text-purple-400 flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded">
+              <CloudDownload className="w-3 h-3" />
+              외부 조회
+            </span>
+          )}
+          <span className="text-xs text-gray-500 flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> 최근 보고일:{' '}
+            {metadata.latestReportDate}
+          </span>
+        </div>
       </div>
       <div className="divide-y divide-gray-800/60">
         {rows.map((row, index) => (

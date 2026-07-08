@@ -5,7 +5,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const path = require('path');
-const { checkIpFromLocalDb } = require('./ipService');
+const { checkIpFromLocalDb, ensureHistoryTable } = require('./ipService');
 
 // 환경변수(.env) 설정 로드
 dotenv.config();
@@ -464,7 +464,8 @@ app.get('/api/v2/ip/check', async (req, res) => {
 
 // 서버 시작
 const PORT = process.env.PORT || 3000;
-testDBConnection().then(() => {
+testDBConnection().then(async () => {
+  await ensureHistoryTable(pool);
   app.listen(PORT, () => {
     console.log(` API 서버가 구동되었습니다. (Port: ${PORT})`);
     console.log(`Swagger 문서: http://localhost:${PORT}/api-docs`);
