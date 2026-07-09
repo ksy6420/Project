@@ -1,9 +1,11 @@
 import type { IPMetadata } from '../types/threat';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
 import { IPSearchForm } from '../components/organisms/IPSearchForm';
 import { ScanResultView } from '../components/organisms/ScanResultView';
 import { Footer } from '../components/layout/Footer';
+import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3000/api/v2';
 
@@ -20,15 +22,24 @@ function mapApiResult(data: any, ip: string): IPMetadata {
     totalReports: data.totalReports ?? 0,
     uniqueSources: data.numDistinctUsers ?? 0,
     latestReportDate: data.lastReportedAt || 'N/A',
-    status: score >= 71 ? 'Danger' : score >= 31 ? 'Warning' : 'Safe',
+    status: score >= 75 ? 'Danger' : score >= 25 ? 'Warning' : 'Safe',
     isExternalFetch: data.isExternalFetch ?? false,
   };
 }
 
 export function Dashboard() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentResult, setCurrentResult] = useState<IPMetadata | null>(null);
+  const [rawData, setRawData] = useState<any>(null);
   const [searchError, setSearchError] = useState<string>('');
+
+  useEffect(() => {
+    const ipFromUrl = searchParams.get('ip');
+    if (ipFromUrl) {
+      handleIPSearch(ipFromUrl);
+    }
+  }, []);
 
   const handleIPSearch = async (ipToSearch: string) => {
     setIsLoading(true);
@@ -36,16 +47,20 @@ export function Dashboard() {
     setCurrentResult(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/ip/check?ip=${ipToSearch}`);
-      const body = await res.json();
+      const res = await axios.get(`${API_BASE_URL}/ip/check`, {
+        params: { ip: ipToSearch },
+      });
 
-      if (!res.ok) {
-        throw new Error(body.message || 'IP 조회 중 오류가 발생했습니다.');
-      }
-
-      setCurrentResult(mapApiResult(body.data, ipToSearch));
+      setCurrentResult(mapApiResult(res.data.data, ipToSearch));
+      setRawData(res.data.data);
+      setSearchParams({ ip: ipToSearch }, { replace: true });
     } catch (error) {
-      setSearchError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
+      setSearchParams({}, { replace: true });
+      setSearchError(
+        error instanceof Error
+          ? error.message
+          : '알 수 없는 오류가 발생했습니다.',
+      );
     } finally {
       setIsLoading(false);
     }
@@ -56,17 +71,11 @@ export function Dashboard() {
       <Header />
 
       <main className="flex-1 px-6 md:px-12 py-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
-        <div className="pb-2 border-b border-gray-800/60">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white flex flex-wrap items-center gap-x-2 gap-y-1 leading-none">
-            <span className="text-gray-300 font-extrabold">실시간 IP 검사</span>
-            <span className="text-blue-500 font-light select-none">»</span>
-            <span className="text-[#F97316] font-mono drop-shadow-[0_4px_10px_rgba(249,115,22,0.25)] tracking-tight">
-              {currentResult ? currentResult.ip : ''}
-            </span>
-          </h1>
-        </div>
-
-        <IPSearchForm onSearch={handleIPSearch} isLoading={isLoading} />
+        <IPSearchForm
+          onSearch={handleIPSearch}
+          isLoading={isLoading}
+          initialIp={searchParams.get('ip') || ''}
+        />
 
         {searchError && (
           <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-sm">
@@ -75,7 +84,7 @@ export function Dashboard() {
         )}
 
         {currentResult ? (
-          <ScanResultView result={currentResult} />
+          <ScanResultView result={currentResult} rawData={rawData} />
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/40 rounded-xl bg-[#111827]/40">
             <div className="w-16 h-16 rounded-full bg-gray-800/40 flex items-center justify-center text-gray-500 mb-4 border border-gray-800/80"></div>

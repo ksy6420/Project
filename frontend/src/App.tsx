@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/LoginPage';
 import { Dashboard } from './pages/Dashboard';
+import { BlacklistPage } from './pages/BlacklistPage';
 import { useAuth } from './context/AuthContext';
 import './App.css';
 
@@ -36,6 +37,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/blacklist"
+        element={
+          <ProtectedRoute>
+            <BlacklistPage />
           </ProtectedRoute>
         }
       />

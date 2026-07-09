@@ -5,7 +5,17 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const path = require('path');
-const { checkIpFromLocalDb, ensureHistoryTable } = require('./ipService');
+const {
+  checkIpFromLocalDb,
+  getHistoryByDate,
+  getBlacklistByDate,
+  searchIpInBlacklist,
+  ensureHistoryTable,
+  ensureBlacklistTable,
+  ensureBlacklistDailyTable,
+  fetchDailyBlacklist,
+  ensureDailyPartitions,
+} = require('./ipService');
 
 // 환경변수(.env) 설정 로드
 dotenv.config();
@@ -51,13 +61,10 @@ const pool = mysql.createPool({
 });
 
 async function testDBConnection() {
-  console.log('DB 연결 테스트 중...');
   try {
     const connection = await pool.getConnection();
-    console.log('DB 연결 성공');
     connection.release();
   } catch (error) {
-    console.error('DB 연결 실패:', error.message);
     process.exit(1);
   }
 }
@@ -462,12 +469,75 @@ app.get('/api/v2/ip/check', async (req, res) => {
   }
 });
 
+// IP 검색 이력 날짜별 조회 (GET /api/v2/ip/history?date=2025-01-01)
+app.get('/api/v2/ip/history', async (req, res) => {
+  const date = req.query.date;
+
+  if (!date) {
+    return res
+      .status(400)
+      .json({ message: '조회할 날짜를 입력해주세요. (YYYY-MM-DD)' });
+  }
+
+  try {
+    const rows = await getHistoryByDate(pool, date);
+    return res.json({ data: rows });
+  } catch (error) {
+    console.error('[History Error]:', error.message);
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+// 블랙리스트 날짜별 조회 (GET /api/v2/ip/blacklist?date=2025-01-01&page=1)
+app.get('/api/v2/ip/blacklist', async (req, res) => {
+  const date = req.query.date;
+  const page = parseInt(req.query.page, 10) || 1;
+  if (!date) {
+    return res
+      .status(400)
+      .json({ message: '조회할 날짜를 입력해주세요. (YYYY-MM-DD)' });
+  }
+  try {
+    const result = await getBlacklistByDate(pool, date, page);
+    return res.json(result);
+  } catch (error) {
+    console.error('[Blacklist Error]:', error.message);
+    return res.status(500).json({ message: error.message });
+  }
+});
+
+// 블랙리스트 IP 검색 (GET /api/v2/ip/blacklist/search?ip=1.1.220.166)
+app.get('/api/v2/ip/blacklist/search', async (req, res) => {
+  const ip = req.query.ip;
+  if (!ip) {
+    return res.status(400).json({ message: '검색할 IP 주소를 입력해주세요.' });
+  }
+  try {
+    const result = await searchIpInBlacklist(pool, ip);
+    return res.json(result);
+  } catch (error) {
+    console.error('[Blacklist Search Error]:', error.message);
+    return res.status(500).json({ message: error.message });
+  }
+});
+
 // 서버 시작
 const PORT = process.env.PORT || 3000;
 testDBConnection().then(async () => {
   await ensureHistoryTable(pool);
-  app.listen(PORT, () => {
-    console.log(` API 서버가 구동되었습니다. (Port: ${PORT})`);
-    console.log(`Swagger 문서: http://localhost:${PORT}/api-docs`);
-  });
+  await ensureBlacklistTable(pool);
+  await ensureBlacklistDailyTable(pool);
+  app.listen(PORT, () => {});
+  scheduleDailyBlacklistFetch(pool);
 });
+
+function scheduleDailyBlacklistFetch(pool) {
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const msUntilMidnight = tomorrow.getTime() - now.getTime() + 5000;
+  setTimeout(() => {
+    fetchDailyBlacklist(pool);
+    setInterval(() => fetchDailyBlacklist(pool), 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+  setInterval(() => ensureDailyPartitions(pool), 24 * 60 * 60 * 1000);
+}

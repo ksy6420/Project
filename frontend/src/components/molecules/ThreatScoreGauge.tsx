@@ -2,10 +2,10 @@ interface ThreatGaugeProps {
   score: number;
 }
 
-export const ThreatScoreGauge: React.FC<ThreatGaugeProps> = ({ score }) => {
+export function ThreatScoreGauge({ score }: ThreatGaugeProps) {
   const getTheme = () => {
-    if (score >= 71) return { stroke: '#EF4444', text: 'text-red-500' };
-    if (score >= 31) return { stroke: '#F59E0B', text: 'text-yellow-500' };
+    if (score >= 75) return { stroke: '#EF4444', text: 'text-red-500' };
+    if (score >= 25) return { stroke: '#F59E0B', text: 'text-yellow-500' };
     return { stroke: '#10B981', text: 'text-green-500' };
   };
 
@@ -70,4 +70,4 @@ export const ThreatScoreGauge: React.FC<ThreatGaugeProps> = ({ score }) => {
       </div>
     </div>
   );
-};
+}

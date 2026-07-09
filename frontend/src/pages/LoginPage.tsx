@@ -13,7 +13,7 @@ export function LoginPage() {
         <div className="flex flex-col items-center mb-8">
           <div className="flex items-center gap-3 mb-2">
             <span className="text-3xl font-extrabold text-white tracking-wide">
-              AbuseIPDB
+              PCyber
             </span>
           </div>
         </div>
