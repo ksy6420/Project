@@ -65,7 +65,10 @@ async function testDBConnection() {
   try {
     const connection = await pool.getConnection();
     connection.release();
+    console.log('✔ 데이터베이스 연결 성공!'); // 성공 확인용 로그 추가
   } catch (error) {
+    // ⭕ 에러 원인을 화면에 출력하도록 수정!
+    console.error('❌ [DB 연결 실패 원인]:', error.message);
     process.exit(1);
   }
 }
