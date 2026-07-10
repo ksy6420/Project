@@ -523,26 +523,69 @@ app.get('/api/v2/ip/blacklist/search', async (req, res) => {
   }
 });
 
-// 프론트엔드 정적 파일 serving
-app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+// // 프론트엔드 정적 파일 serving
+// app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
 
-// 프론트엔드 SPA 라우트 (API 라우트 다음에)
-app.get('/{*splat}', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
-});
+// // 프론트엔드 SPA 라우트 (API 라우트 다음에)
+// app.get('/{*splat}', (req, res) => {
+//   res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+// });
 
-// 서버 시작
+// // 서버 시작
+// const PORT = process.env.PORT || 3000;
+
+// testDBConnection().then(async () => {
+//   await ensureHistoryTable(pool);
+//   await ensureBlacklistTable(pool);
+//   await ensureBlacklistDailyTable(pool);
+
+//   app.listen(PORT, () => {
+//     console.log(`[Server] 포트 ${PORT}에서 실행 중`);
+//   });
+
+//   scheduleDailyBlacklistFetch(pool);
+// });
+
+// function scheduleDailyBlacklistFetch(pool) {
+//   fetchDailyBlacklist(pool);
+//   const now = new Date();
+//   const tomorrow = new Date(
+//     now.getFullYear(),
+//     now.getMonth(),
+//     now.getDate() + 1,
+//   );
+//   const msUntilMidnight = tomorrow.getTime() - now.getTime() + 5000;
+//   setTimeout(() => {
+//     fetchDailyBlacklist(pool);
+//     setInterval(() => fetchDailyBlacklist(pool), 24 * 60 * 60 * 1000);
+//   }, msUntilMidnight);
+//   setInterval(() => ensureDailyPartitions(pool), 24 * 60 * 60 * 1000);
+// }
+
 const PORT = process.env.PORT || 3000;
 
 testDBConnection().then(async () => {
+  // 1. 데이터베이스 테이블 검사 및 생성
   await ensureHistoryTable(pool);
   await ensureBlacklistTable(pool);
   await ensureBlacklistDailyTable(pool);
 
+  // 2. [위치 매우 중요] 브라우저가 dist 폴더 내 JS, CSS 파일을 404 없이 가져가도록 먼저 등록
+  app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+  // 3. [최신 문법 적용] API 주소가 아닌 모든 화면 요청을 index.html로 안전하게 전달
+  // '/{*splat}' 대신 최신 Express 표준 와일드카드인 '*'를 사용하되, API 요청은 제외합니다.
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) return; // API 요청은 프론트엔드 화면으로 돌리지 않고 통과
+    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+  });
+
+  // 4. [딱 한 번만 실행] 모든 라우터와 정적 파일 세팅이 끝난 후 포트를 엽니다.
   app.listen(PORT, () => {
     console.log(`[Server] 포트 ${PORT}에서 실행 중`);
   });
 
+  // 5. 배치 스케줄러 가동
   scheduleDailyBlacklistFetch(pool);
 });
 
