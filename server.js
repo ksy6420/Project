@@ -6,12 +6,6 @@ const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const path = require('path');
 
-app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
-});
-
 const {
   checkIpFromLocalDb,
   getHistoryByDate,
@@ -531,13 +525,22 @@ app.get('/api/v2/ip/blacklist/search', async (req, res) => {
 
 // 서버 시작
 const PORT = process.env.PORT || 3000;
+
 testDBConnection().then(async () => {
   await ensureHistoryTable(pool);
   await ensureBlacklistTable(pool);
   await ensureBlacklistDailyTable(pool);
+
+  app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+  });
+
   app.listen(PORT, () => {
     console.log(`[Server] 포트 ${PORT}에서 실행 중`);
   });
+
   scheduleDailyBlacklistFetch(pool);
 });
 
