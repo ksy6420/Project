@@ -523,6 +523,14 @@ app.get('/api/v2/ip/blacklist/search', async (req, res) => {
   }
 });
 
+// 프론트엔드 정적 파일 serving
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+// 프론트엔드 SPA 라우트 (API 라우트 다음에)
+app.get('/{*splat}', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+});
+
 // 서버 시작
 const PORT = process.env.PORT || 3000;
 
@@ -530,12 +538,6 @@ testDBConnection().then(async () => {
   await ensureHistoryTable(pool);
   await ensureBlacklistTable(pool);
   await ensureBlacklistDailyTable(pool);
-
-  app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
-
-  app.get('(.*)', (req, res) => {
-    res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
-  });
 
   app.listen(PORT, () => {
     console.log(`[Server] 포트 ${PORT}에서 실행 중`);
