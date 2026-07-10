@@ -5,6 +5,13 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const path = require('path');
+
+app.use(express.static(path.join(__dirname, 'frontend', 'dist')));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
+});
+
 const {
   checkIpFromLocalDb,
   getHistoryByDate,
