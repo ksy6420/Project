@@ -338,70 +338,96 @@ async function ensureBlacklistDailyTable(pool) {
         PARTITION p_initial VALUES LESS THAN ('2026-01-01'),
         PARTITION p_future VALUES LESS THAN MAXVALUE
       )
-    `)
-    await ensureDailyPartitions(pool)
+    `);
+    await ensureDailyPartitions(pool);
   } catch (err) {
-    console.error('[DB] blacklist_daily 테이블 생성 실패:', err.message)
+    console.error('[DB] blacklist_daily 테이블 생성 실패:', err.message);
   }
 }
 
 async function ensureDailyPartitions(pool) {
-  const today = new Date()
+  const today = new Date();
   for (let i = 0; i <= 2; i++) {
-    const date = new Date(today.getFullYear(), today.getMonth() + i, 1)
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
-    const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1)
-    const lessThan = nextMonth.toISOString().slice(0, 10)
-    const pName = 'p_' + y + '_' + m
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    const lessThan = nextMonth.toISOString().slice(0, 10);
+    const pName = 'p_' + y + '_' + m;
     try {
       await pool.execute(
-        'ALTER TABLE blacklist_daily REORGANIZE PARTITION p_future INTO (PARTITION ' + pName + " VALUES LESS THAN ('" + lessThan + "'), PARTITION p_future VALUES LESS THAN MAXVALUE)"
-      )
+        'ALTER TABLE blacklist_daily REORGANIZE PARTITION p_future INTO (PARTITION ' +
+          pName +
+          " VALUES LESS THAN ('" +
+          lessThan +
+          "'), PARTITION p_future VALUES LESS THAN MAXVALUE)",
+      );
     } catch (_) {}
   }
   for (let i = -3; i < 0; i++) {
-    const date = new Date(today.getFullYear(), today.getMonth() + i, 1)
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
     try {
-      await pool.execute('ALTER TABLE blacklist_daily DROP PARTITION p_' + y + '_' + m)
+      await pool.execute(
+        'ALTER TABLE blacklist_daily DROP PARTITION p_' + y + '_' + m,
+      );
     } catch (_) {}
   }
 }
 
 async function fetchDailyBlacklist(pool) {
-  const apiKey = process.env.ABUSEIPDB_API_KEY
+  const apiKey = process.env.ABUSEIPDB_API_KEY;
   if (!apiKey) {
-    console.error('[Blacklist] ABUSEIPDB_API_KEY가 설정되지 않았습니다.')
-    return 0
+    console.error('[Blacklist] ABUSEIPDB_API_KEY가 설정되지 않았습니다.');
+    return 0;
   }
 
   try {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10);
+
+    const [[{ cnt }]] = await pool.query(
+      'SELECT COUNT(*) AS cnt FROM blacklist_daily WHERE snapshot_date = ?',
+      [today],
+    );
+    if (cnt > 0) {
+      console.log(
+        '[Blacklist] 오늘 데이터가 이미 존재합니다. API 호출을 건너뜁니다.',
+        today,
+      );
+      return 0;
+    }
+
     const response = await axios.get(ABUSEIPDB_BLACKLIST_URL, {
       params: { confidenceMinimum: 25, limit: 10000 },
       headers: { Key: apiKey, Accept: 'application/json' },
       timeout: 30000,
-    })
+    });
 
-    const { data, meta } = response.data
-    if (!data || data.length === 0) return 0
+    const { data, meta } = response.data;
+    if (!data || data.length === 0) return 0;
 
-    const placeholders = data.map(() => '(?, ?, ?)').join(',')
-    const flat = []
+    const placeholders = data.map(() => '(?, ?, ?)').join(',');
+    const flat = [];
     for (const item of data) {
-      flat.push(today, item.ipAddress, JSON.stringify(item))
+      flat.push(today, item.ipAddress, JSON.stringify(item));
     }
 
     await pool.execute(
-      'INSERT IGNORE INTO blacklist_daily (snapshot_date, ip_address, json_data) VALUES ' + placeholders,
+      'INSERT IGNORE INTO blacklist_daily (snapshot_date, ip_address, json_data) VALUES ' +
+        placeholders,
       flat,
-    )
-    return data.length
+    );
+    return data.length;
   } catch (error) {
-    console.error('[Blacklist Fetch Error]', error.message)
-    return 0
+    if (error.response?.status === 429) {
+      console.error(
+        '[Blacklist] API 요청 한도를 초과했습니다. 내일 다시 시도합니다.',
+      );
+    } else {
+      console.error('[Blacklist Fetch Error]', error.message);
+    }
+    return 0;
   }
 }
 
@@ -526,44 +552,82 @@ async function getHistoryByDate(pool, dateStr) {
 
 async function getBlacklistByDate(pool, dateStr, page = 1, limit = 50) {
   try {
-    const offset = (page - 1) * limit
+    const offset = (page - 1) * limit;
     const [[{ total }]] = await pool.query(
       'SELECT COUNT(*) AS total FROM blacklist_daily WHERE snapshot_date = ?',
       [dateStr],
-    )
+    );
     const [rows] = await pool.query(
-      'SELECT ip_address, json_data FROM blacklist_daily WHERE snapshot_date = ? ORDER BY ip_address LIMIT ' + limit + ' OFFSET ' + offset,
-      [dateStr],
-    )
+      'SELECT ip_address, json_data FROM blacklist_daily WHERE snapshot_date = ? ORDER BY ip_address LIMIT ? OFFSET ?',
+      [dateStr, limit, offset],
+    );
     return {
-      data: rows.map((row) => ({
-        ip: row.ip_address,
-        ...JSON.parse(row.json_data),
-      })),
+      data: rows.map((row) => {
+        const parsed =
+          typeof row.json_data === 'string'
+            ? JSON.parse(row.json_data)
+            : row.json_data;
+        return {
+          ip: row.ip_address,
+          ...parsed,
+          countryName: getCountryName(parsed.countryCode),
+        };
+      }),
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit),
       },
-    }
+    };
   } catch (error) {
     console.error('[getBlacklistByDate Error]', error.message);
     throw error;
   }
 }
 
-async function searchIpInBlacklist(pool, ip) {
+async function searchIpInBlacklist(pool, ip, dateStr) {
+  const limit = 50;
   try {
-    const [rows] = await pool.query(
+    const [allDateRows] = await pool.query(
       'SELECT DISTINCT snapshot_date FROM blacklist_daily WHERE ip_address = ? ORDER BY snapshot_date DESC',
       [ip],
     );
-    const dates = rows.map((r) => {
+    const allDates = allDateRows.map((r) => {
       const d = new Date(r.snapshot_date);
-      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      return (
+        d.getFullYear() +
+        '-' +
+        String(d.getMonth() + 1).padStart(2, '0') +
+        '-' +
+        String(d.getDate()).padStart(2, '0')
+      );
     });
-    return { found: dates.length > 0, dates };
+
+    if (dateStr) {
+      const [[{ total }]] = await pool.query(
+        'SELECT COUNT(*) AS total FROM blacklist_daily WHERE snapshot_date = ?',
+        [dateStr],
+      );
+      const [[{ rank }]] = await pool.query(
+        'SELECT COUNT(*) AS rank FROM blacklist_daily WHERE snapshot_date = ? AND ip_address <= ?',
+        [dateStr, ip],
+      );
+      const [rows] = await pool.query(
+        'SELECT ip_address, json_data FROM blacklist_daily WHERE snapshot_date = ? AND ip_address = ?',
+        [dateStr, ip],
+      );
+      const found = rows.length > 0;
+      const page = found ? Math.ceil(rank / limit) : 1;
+      return {
+        found,
+        dates: allDates,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
+
+    return { found: allDates.length > 0, dates: allDates };
   } catch (error) {
     console.error('[searchIpInBlacklist Error]', error.message);
     throw error;

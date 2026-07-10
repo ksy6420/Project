@@ -506,14 +506,15 @@ app.get('/api/v2/ip/blacklist', async (req, res) => {
   }
 });
 
-// 블랙리스트 IP 검색 (GET /api/v2/ip/blacklist/search?ip=1.1.220.166)
+// 블랙리스트 IP 검색 (GET /api/v2/ip/blacklist/search?ip=1.1.220.166&date=2025-01-01)
 app.get('/api/v2/ip/blacklist/search', async (req, res) => {
   const ip = req.query.ip;
+  const date = req.query.date;
   if (!ip) {
     return res.status(400).json({ message: '검색할 IP 주소를 입력해주세요.' });
   }
   try {
-    const result = await searchIpInBlacklist(pool, ip);
+    const result = await searchIpInBlacklist(pool, ip, date);
     return res.json(result);
   } catch (error) {
     console.error('[Blacklist Search Error]:', error.message);
@@ -527,13 +528,20 @@ testDBConnection().then(async () => {
   await ensureHistoryTable(pool);
   await ensureBlacklistTable(pool);
   await ensureBlacklistDailyTable(pool);
-  app.listen(PORT, () => {});
+  app.listen(PORT, () => {
+    console.log(`[Server] 포트 ${PORT}에서 실행 중`);
+  });
   scheduleDailyBlacklistFetch(pool);
 });
 
 function scheduleDailyBlacklistFetch(pool) {
+  fetchDailyBlacklist(pool);
   const now = new Date();
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const tomorrow = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+  );
   const msUntilMidnight = tomorrow.getTime() - now.getTime() + 5000;
   setTimeout(() => {
     fetchDailyBlacklist(pool);

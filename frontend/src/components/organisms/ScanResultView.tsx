@@ -1,4 +1,4 @@
-import type { IPMetadata } from '../../types/threat';
+import type { IPMetadata, Report } from '../../types/threat';
 import { MetadataTable } from '../molecules/MetadataTable';
 import {
   ShieldAlert,
@@ -9,9 +9,14 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+interface RawData {
+  reports?: Report[];
+  [key: string]: unknown;
+}
+
 interface ScanResultViewProps {
   result: IPMetadata;
-  rawData?: any;
+  rawData?: RawData;
 }
 
 const REPORTS_PER_PAGE = 15;
@@ -168,10 +173,10 @@ export function ScanResultView({ result, rawData }: ScanResultViewProps) {
                       국가
                     </th>
                     <th className="text-left py-2.5 pr-3 whitespace-nowrap">
-                      리포터 ID
+                      ID
                     </th>
                     <th className="text-left py-2.5 pr-3 whitespace-nowrap">
-                      ReportedAt
+                      IoA Timestamp
                     </th>
                     <th className="text-left py-2.5 pr-3 w-full">Comment</th>
                     <th className="text-left py-2.5 whitespace-nowrap">
@@ -180,7 +185,7 @@ export function ScanResultView({ result, rawData }: ScanResultViewProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-800/40">
-                  {paginatedReports.map((r: any, i: number) => (
+                  {paginatedReports.map((r, i) => (
                     <tr
                       key={(reportPage - 1) * REPORTS_PER_PAGE + i}
                       className="hover:bg-gray-800/20 transition-colors"

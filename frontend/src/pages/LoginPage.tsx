@@ -19,10 +19,6 @@ export function LoginPage() {
         </div>
 
         <LoginForm />
-
-        <div className="relative flex items-center pt-2 pb-2 my-6">
-          <div className="flex-grow border-t border-gray-700/60" />
-        </div>
       </div>
     </div>
   );

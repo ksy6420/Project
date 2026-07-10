@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { InputField } from '../atoms/InputField';
@@ -11,7 +11,7 @@ export function LoginForm() {
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const success = await login(email, password);
     if (success) navigate('/dashboard', { replace: true });
@@ -51,9 +51,9 @@ export function LoginForm() {
           <input type="checkbox" className="accent-blue-600 w-3.5 h-3.5 cursor-pointer" />
           <span>로그인 유지</span>
         </label>
-        <a href="#forgot" className="text-blue-400 font-medium no-underline hover:text-blue-300 hover:underline">
+        <span className="text-blue-400 font-medium">
           비밀번호를 잊으셨나요?
-        </a>
+        </span>
       </div>
 
       <Button type="submit" variant="primary" disabled={loading}>

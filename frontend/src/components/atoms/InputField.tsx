@@ -19,7 +19,8 @@ export function InputField({
   id,
   ...props
 }: InputFieldProps) {
-  const inputId = id || useId();
+  const generatedId = useId();
+  const inputId = id || generatedId;
 
   return (
     <div className="flex flex-col gap-2 text-left w-full">

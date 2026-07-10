@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Calendar,
@@ -10,17 +10,14 @@ import {
 import { Header } from '../components/layout/Header';
 import { Footer } from '../components/layout/Footer';
 import axios from 'axios';
-
-const API_BASE_URL = 'http://localhost:3000/api/v2';
+import { API_BASE_URL } from '../config';
 
 interface BlacklistItem {
   ip: string;
   abuseConfidenceScore?: number;
-  isp?: string;
   countryName?: string;
-  usageType?: string;
-  totalReports?: number;
-  checkedAt: string;
+  countryCode?: string;
+  lastReportedAt?: string;
 }
 
 interface Pagination {
@@ -34,48 +31,105 @@ export function BlacklistPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const dateParam = searchParams.get('date') || '';
+  const ipParam = searchParams.get('ip') || '';
   const pageParam = parseInt(searchParams.get('page') || '1', 10);
   const [items, setItems] = useState<BlacklistItem[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [dateValue, setDateValue] = useState(dateParam);
-  const [ipSearchValue, setIpSearchValue] = useState('');
-  const [ipSearchResult, setIpSearchResult] = useState<{ found: boolean; dates: string[] } | null>(null);
+  const [ipSearchValue, setIpSearchValue] = useState(ipParam);
+  const [ipSearchResult, setIpSearchResult] = useState<{
+    found: boolean;
+    dates: string[];
+  } | null>(null);
   const [ipSearchLoading, setIpSearchLoading] = useState(false);
+  const itemRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
     if (!dateParam) return;
-    setLoading(true);
-    setError('');
-    axios
-      .get(`${API_BASE_URL}/ip/blacklist`, {
-        params: { date: dateParam, page: pageParam },
-      })
-      .then((res) => {
-        setItems(res.data.data || []);
-        setPagination(res.data.pagination || null);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    const fetchData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await axios.get(`${API_BASE_URL}/ip/blacklist`, {
+          params: { date: dateParam, page: pageParam },
+        });
+        if (!cancelled) {
+          setItems(res.data.data || []);
+          setPagination(res.data.pagination || null);
+        }
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : '오류가 발생했습니다.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, [dateParam, pageParam]);
 
+  useEffect(() => {
+    if (ipParam && items.length > 0) {
+      const el = itemRefs.current[ipParam];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [ipParam, items]);
+
   const goToPage = (page: number) => {
-    setSearchParams({ date: dateParam, page: String(page) });
+    const params: Record<string, string> = {
+      date: dateParam,
+      page: String(page),
+    };
+    if (ipParam) params.ip = ipParam;
+    setSearchParams(params);
   };
 
   const handleDateSearch = () => {
     if (!dateValue) return;
-    navigate(`/blacklist?date=${dateValue}&page=1`);
+    setIpSearchResult(null);
+    const params = `date=${dateValue}&page=1`;
+    navigate(`/blacklist?${params}`);
   };
 
   const handleIpSearch = async () => {
     const ip = ipSearchValue.trim();
     if (!ip) return;
+
+    if (dateValue) {
+      setIpSearchLoading(true);
+      setIpSearchResult(null);
+      try {
+        const res = await axios.get(`${API_BASE_URL}/ip/blacklist/search`, {
+          params: { ip, date: dateValue },
+        });
+        if (res.data.found && res.data.page) {
+          setIpSearchResult({ found: true, dates: res.data.dates });
+          navigate(`/blacklist?date=${dateValue}&ip=${ip}&page=${res.data.page}`);
+        } else {
+          setIpSearchResult({ found: false, dates: res.data.dates || [] });
+          navigate(`/blacklist?date=${dateValue}&page=1`);
+        }
+      } catch {
+        setIpSearchResult({ found: false, dates: [] });
+        navigate(`/blacklist?date=${dateValue}&page=1`);
+      } finally {
+        setIpSearchLoading(false);
+      }
+      return;
+    }
+
     setIpSearchLoading(true);
     setIpSearchResult(null);
     try {
-      const res = await axios.get(`${API_BASE_URL}/ip/blacklist/search`, { params: { ip } });
+      const res = await axios.get(`${API_BASE_URL}/ip/blacklist/search`, {
+        params: { ip },
+      });
       setIpSearchResult(res.data);
     } catch {
       setIpSearchResult({ found: false, dates: [] });
@@ -89,6 +143,29 @@ export function BlacklistPage() {
     if (score >= 75) return 'text-red-400';
     if (score >= 25) return 'text-yellow-400';
     return 'text-green-400';
+  };
+
+  const formatDateRanges = (dates: string[]): string => {
+    if (dates.length === 0) return '';
+    const sorted = [...dates].sort();
+    const ranges: string[] = [];
+    let start = sorted[0];
+    let prev = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+      const prevDate = new Date(prev);
+      const currDate = new Date(sorted[i]);
+      const diff = (currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (diff === 1) {
+        prev = sorted[i];
+      } else {
+        ranges.push(start === prev ? start : `${start}~${prev}`);
+        start = sorted[i];
+        prev = sorted[i];
+      }
+    }
+    ranges.push(start === prev ? start : `${start}~${prev}`);
+    return ranges.join(', ');
   };
 
   return (
@@ -131,9 +208,11 @@ export function BlacklistPage() {
         </div>
 
         {ipSearchResult && (
-          <div className={`p-4 rounded-xl border text-sm ${ipSearchResult.found ? 'bg-red-500/10 border-red-500/30 text-red-200' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'}`}>
+          <div
+            className={`p-4 rounded-xl border text-sm ${ipSearchResult.found ? 'bg-red-500/10 border-red-500/30 text-red-200' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'}`}
+          >
             {ipSearchResult.found
-              ? `IP가 블랙리스트에서 발견되었습니다 (${ipSearchResult.dates.join(', ')})`
+              ? `IP가 블랙리스트에서 발견되었습니다 (${formatDateRanges(ipSearchResult.dates)})`
               : '해당 IP는 블랙리스트에 존재하지 않습니다.'}
           </div>
         )}
@@ -164,8 +243,15 @@ export function BlacklistPage() {
             <div className="space-y-2">
               {items.map((item) => (
                 <div
-                  key={`${item.ip}-${item.checkedAt}`}
-                  className="flex items-center justify-between p-4 rounded-lg bg-[#111827]/60 border border-red-900/30 hover:border-red-700/40 transition-colors"
+                  key={item.ip}
+                  ref={(el) => {
+                    itemRefs.current[item.ip] = el;
+                  }}
+                  className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
+                    ipParam === item.ip
+                      ? 'bg-blue-600/20 border-blue-500/60 ring-1 ring-blue-500/40'
+                      : 'bg-[#111827]/60 border-red-900/30 hover:border-red-700/40'
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <Shield className="w-4 h-4 text-red-500 shrink-0" />
@@ -173,14 +259,11 @@ export function BlacklistPage() {
                       <span className="text-sm font-mono font-semibold text-white">
                         {item.ip}
                       </span>
-                      <span className="text-[11px] text-gray-500 ml-2">
-                        {new Date(item.checkedAt).toLocaleString('ko-KR')}
-                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3 text-xs">
                     <span className="text-gray-400">
-                      {item.countryName || '-'}
+                      {item.countryName || item.countryCode || '-'}
                     </span>
                     <span
                       className={`font-bold ${getScoreColor(item.abuseConfidenceScore)}`}
@@ -189,9 +272,9 @@ export function BlacklistPage() {
                         ? `${item.abuseConfidenceScore}%`
                         : '-'}
                     </span>
-                    <span className="text-gray-500">
-                      {item.totalReports != null
-                        ? `신고 ${item.totalReports}회`
+                    <span className="text-[11px] text-gray-500">
+                      {item.lastReportedAt
+                        ? new Date(item.lastReportedAt).toLocaleString('ko-KR')
                         : ''}
                     </span>
                   </div>

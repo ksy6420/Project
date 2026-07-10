@@ -8,17 +8,16 @@ import {
   type ReactNode,
 } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 export interface User {
   userId: string;
   userName: string;
   email: string;
-  avatarUrl?: string;
 }
 
 export interface AuthContextType {
   user: User | null;
-  accessToken: string | null;
   loading: boolean;
   error: string;
   login: (email: string, password: string) => Promise<boolean>;
@@ -26,8 +25,6 @@ export interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);
-
-const API_BASE_URL = 'http://localhost:3000/api/v2';
 
 async function postRefresh(refreshToken: string) {
   const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {
@@ -38,7 +35,6 @@ async function postRefresh(refreshToken: string) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -51,8 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const token = await postRefresh(storedRefreshToken);
-        setAccessToken(token);
+        await postRefresh(storedRefreshToken);
         setUser(JSON.parse(storedUser));
       } catch {
         localStorage.removeItem('refreshToken');
@@ -71,11 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const storedRefreshToken = localStorage.getItem('refreshToken');
         if (!storedRefreshToken) return;
         try {
-          const token = await postRefresh(storedRefreshToken);
-          setAccessToken(token);
+          await postRefresh(storedRefreshToken);
         } catch {
           setUser(null);
-          setAccessToken(null);
           localStorage.removeItem('refreshToken');
           localStorage.removeItem('user');
         }
@@ -98,13 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { timeout: 10000 },
       );
       const data = response.data;
-      setAccessToken(data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken);
       const loggedInUser: User = {
         userId: data.user.userId,
         userName: data.user.userName,
         email,
-        avatarUrl: undefined,
       };
       setUser(loggedInUser);
       localStorage.setItem('user', JSON.stringify(loggedInUser));
@@ -112,7 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: unknown) {
       const msg =
         err != null && typeof err === 'object' && 'response' in err
-          ? ((err as any).response?.data?.message ?? '서버 오류')
+          ? ((err as { response?: { data?: { message?: string } } }).response
+              ?.data?.message ?? '서버 오류')
           : err instanceof Error
             ? err.message
             : '인증 처리에 실패했습니다.';
@@ -135,7 +127,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ignore
     } finally {
       setUser(null);
-      setAccessToken(null);
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       setLoading(false);
@@ -143,8 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const value = useMemo(
-    () => ({ user, accessToken, loading, error, login, logout }),
-    [user, accessToken, loading, error, login, logout],
+    () => ({ user, loading, error, login, logout }),
+    [user, loading, error, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

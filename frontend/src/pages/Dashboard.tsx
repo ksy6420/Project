@@ -1,4 +1,4 @@
-import type { IPMetadata } from '../types/threat';
+import type { IPMetadata, Report } from '../types/threat';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Header } from '../components/layout/Header';
@@ -6,10 +6,25 @@ import { IPSearchForm } from '../components/organisms/IPSearchForm';
 import { ScanResultView } from '../components/organisms/ScanResultView';
 import { Footer } from '../components/layout/Footer';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
-const API_BASE_URL = 'http://localhost:3000/api/v2';
+interface IpCheckResponse {
+  ipAddress?: string;
+  abuseConfidenceScore?: number;
+  isp?: string;
+  usageType?: string;
+  hostnames?: string[];
+  domain?: string;
+  countryName?: string;
+  totalReports?: number;
+  numDistinctUsers?: number;
+  lastReportedAt?: string;
+  isExternalFetch?: boolean;
+  reports?: Report[];
+  [key: string]: unknown;
+}
 
-function mapApiResult(data: any, ip: string): IPMetadata {
+function mapApiResult(data: IpCheckResponse, ip: string): IPMetadata {
   const score = data.abuseConfidenceScore ?? 0;
   return {
     ip: data.ipAddress || ip,
@@ -29,19 +44,12 @@ function mapApiResult(data: any, ip: string): IPMetadata {
 
 export function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [currentResult, setCurrentResult] = useState<IPMetadata | null>(null);
-  const [rawData, setRawData] = useState<any>(null);
-  const [searchError, setSearchError] = useState<string>('');
+  const [rawData, setRawData] = useState<IpCheckResponse | null>(null);
+  const [searchError, setSearchError] = useState('');
 
-  useEffect(() => {
-    const ipFromUrl = searchParams.get('ip');
-    if (ipFromUrl) {
-      handleIPSearch(ipFromUrl);
-    }
-  }, []);
-
-  const handleIPSearch = async (ipToSearch: string) => {
+  const fetchIp = async (ipToSearch: string) => {
     setIsLoading(true);
     setSearchError('');
     setCurrentResult(null);
@@ -66,13 +74,22 @@ export function Dashboard() {
     }
   };
 
+  useEffect(() => {
+    const ipFromUrl = searchParams.get('ip');
+    if (ipFromUrl) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchIp(ipFromUrl);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.get('ip')]);
+
   return (
     <div className="min-h-screen bg-[#0B0F19] text-gray-100 flex flex-col font-sans selection:bg-blue-600/30 selection:text-white">
       <Header />
 
       <main className="flex-1 px-6 md:px-12 py-8 max-w-7xl mx-auto w-full flex flex-col gap-8">
         <IPSearchForm
-          onSearch={handleIPSearch}
+          onSearch={fetchIp}
           isLoading={isLoading}
           initialIp={searchParams.get('ip') || ''}
         />
@@ -84,7 +101,7 @@ export function Dashboard() {
         )}
 
         {currentResult ? (
-          <ScanResultView result={currentResult} rawData={rawData} />
+          <ScanResultView result={currentResult} rawData={rawData ?? undefined} />
         ) : (
           <div className="flex flex-col items-center justify-center py-20 border border-gray-800/40 rounded-xl bg-[#111827]/40">
             <div className="w-16 h-16 rounded-full bg-gray-800/40 flex items-center justify-center text-gray-500 mb-4 border border-gray-800/80"></div>

@@ -19,19 +19,19 @@ export function Header() {
         </span>
 
         <nav className="flex items-center gap-3">
-          <div
+          <button
             onClick={() => navigate('/dashboard')}
             className="px-3.5 py-1.5 rounded-md text-blue-400 bg-blue-500/8 border border-blue-500/20 flex items-center gap-1.5 select-none text-xs font-semibold cursor-pointer hover:bg-blue-500/15 transition-colors"
           >
             실시간 IP 검사
-          </div>
+          </button>
 
-          <div
+          <button
             onClick={() => navigate('/blacklist')}
             className="px-3.5 py-1.5 rounded-md text-blue-400 bg-blue-500/8 border border-blue-500/20 flex items-center gap-1.5 select-none text-xs font-semibold cursor-pointer hover:bg-blue-500/15 transition-colors"
           >
             날짜별 검색
-          </div>
+          </button>
         </nav>
       </div>
 

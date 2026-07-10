@@ -13,6 +13,14 @@ export interface IPMetadata {
   isExternalFetch?: boolean;
 }
 
+export interface Report {
+  reporterCountryCode?: string;
+  reporterId?: number;
+  reportedAt?: string;
+  comment?: string;
+  categories?: number[];
+}
+
 export interface ScanHistory {
   id: string;
   ip: string;
