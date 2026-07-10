@@ -1,8 +1,10 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const mysql = require('mysql2/promise');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const bcrypt = require('bcryptjs'); // 비밀번호 해싱을 위한 bcrypt 모듈
 const path = require('path');
 
@@ -17,9 +19,6 @@ const {
   fetchDailyBlacklist,
   ensureDailyPartitions,
 } = require('./ipService');
-
-// 환경변수(.env) 설정 로드
-dotenv.config();
 
 const REQUIRED_ENV_VARS = [
   'DB_HOST',
